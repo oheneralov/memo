@@ -1,0 +1,103 @@
+---
+# Deploy and Run Node.js Application on Multiple On-Premises Servers
+# This playbook deploys to a group of remote machines in parallel
+
+- name: Deploy Node.js Application to On-Premises Servers
+  hosts: nodejs_app_servers  # Deploy to all servers in this group
+  strategy: linear  # Can change to 'free' for parallel execution
+  serial: 2  # Deploy to 2 servers at a time
+  become: yes
+  
+  vars:
+    app_name: nodejs_app
+    app_source_path: "{{ playbook_dir }}/../app"
+    app_dest_path: "/opt/{{ app_name }}"
+    app_zip_file: "{{ app_name }}.zip"
+    app_temp_path: "/tmp/{{ app_zip_file }}"
+    nodejs_port: 3000
+    deployment_user: "{{ ansible_user_id | default('ubuntu') }}"
+
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg:
+          - "Deploying to: {{ inventory_hostname }}"
+          - "IP Address: {{ ansible_host }}"
+          - "User: {{ deployment_user }}"
+          - "Destination: {{ app_dest_path }}"
+
+    - name: Ensure destination directory exists
+      file:
+        path: "{{ app_dest_path }}"
+        state: directory
+        mode: '0755'
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_user }}"
+
+  roles:
+    - role: deploy_app
+      description: "Zip, copy and extract application"
+    - role: build_app
+      description: "Install dependencies and build app"
+    - role: run_app
+      description: "Start and verify application"
+
+  post_tasks:
+    - name: Deployment status for this host
+      debug:
+        msg:
+          - "========== {{ inventory_hostname }} Deployment Complete =========="
+          - "Application: {{ app_name }}"
+          - "Location: {{ app_dest_path }}"
+          - "Port: {{ nodejs_port }}"
+          - "Running as: {{ deployment_user }}"
+
+  handlers:
+    - name: restart nodejs app
+      shell: |
+        pkill -f "npm start" || true
+        sleep 2
+        cd {{ app_dest_path }}
+        nohup npm start > /var/log/nodejs_app.log 2>&1 &
+      become: yes
+
+---
+
+# Post-deployment verification across all servers
+- name: Verify Deployment Across All Servers
+  hosts: nodejs_app_servers
+  gather_facts: no
+  
+  tasks:
+    - name: Check application health on all servers
+      uri:
+        url: "http://{{ ansible_host }}:{{ nodejs_port }}/"
+        method: GET
+        status_code: [200, 404]
+        timeout: 10
+      register: health_check
+      retries: 3
+      delay: 2
+      ignore_errors: yes
+
+    - name: Display health check results
+      debug:
+        msg: "{{ inventory_hostname }} - Status: {{ 'OK' if health_check.status == 200 else 'Warning' }}"
+
+---
+
+# Summary report
+- name: Deployment Summary
+  hosts: localhost
+  gather_facts: no
+  
+  tasks:
+    - name: Generate deployment report
+      debug:
+        msg:
+          - "========== DEPLOYMENT COMPLETE =========="
+          - "Total servers deployed: {{ groups['nodejs_app_servers'] | length }}"
+          - "Deployed to:"
+          - "{{ groups['nodejs_app_servers'] | to_nice_yaml }}"
+          - "Application Port: 3000"
+          - "Next steps: Configure load balancer if needed"

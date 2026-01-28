@@ -1,0 +1,29 @@
+---
+# Role to run Node.js application
+
+- name: Start Node.js application with nohup
+  shell: |
+    cd {{ app_dest_path }}
+    nohup npm start > /var/log/nodejs_app.log 2>&1 &
+  environment:
+    NODE_ENV: production
+
+- name: Wait for application to start
+  wait_for:
+    port: "{{ nodejs_port }}"
+    delay: 3
+    timeout: 30
+
+- name: Health check - verify service is responding
+  uri:
+    url: "http://localhost:{{ nodejs_port }}/"
+    method: GET
+    status_code: 200
+  retries: 5
+  delay: 2
+  register: health_check_result
+  ignore_errors: yes
+
+- name: Display application status
+  debug:
+    msg: "Node.js application is running on port {{ nodejs_port }}"

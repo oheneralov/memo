@@ -1,0 +1,38 @@
+---
+# Playbook using roles for better organization
+
+- name: Deploy and Run Node.js Application
+  hosts: all
+  become: yes
+  vars:
+    app_name: nodejs_app
+    app_source_path: "{{ playbook_dir }}/../app"
+    app_dest_path: "/opt/{{ app_name }}"
+    app_zip_file: "{{ app_name }}.zip"
+    app_temp_path: "/tmp/{{ app_zip_file }}"
+    nodejs_port: 3000
+
+  pre_tasks:
+    - name: Ensure destination directory exists
+      file:
+        path: "{{ app_dest_path }}"
+        state: directory
+        mode: '0755'
+
+  roles:
+    - role: deploy_app
+      description: "Zip, copy and extract application"
+    - role: build_app
+      description: "Install dependencies and build app"
+    - role: run_app
+      description: "Start and verify application"
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "========== Deployment Complete =========="
+          - "Application: {{ app_name }}"
+          - "Location: {{ app_dest_path }}"
+          - "Port: {{ nodejs_port }}"
+          - "Log file: /var/log/nodejs_app.log"

@@ -1,0 +1,125 @@
+# Example production values for Helm deployment
+replicaCount: 3
+
+image:
+  repository: mycompany/microservice-api
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+serviceLoadBalancer:
+  enabled: true
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /api/v1
+          pathType: Prefix
+        - path: /api/v2
+          pathType: Prefix
+  tls:
+    - secretName: microservice-api-tls
+      hosts:
+        - api.example.com
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector:
+  workload: production
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values:
+          - microservice-api
+      topologyKey: kubernetes.io/hostname
+
+env:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "warn"
+  CACHE_ENABLED: "true"
+
+config:
+  database:
+    host: "postgres.database.svc.cluster.local"
+    port: "5432"
+  redis:
+    host: "redis.cache.svc.cluster.local"
+    port: "6379"
+
+secrets:
+  create: true
+  database:
+    password: "CHANGE_ME_SECURE_PASSWORD"
+  api:
+    key: "CHANGE_ME_API_KEY"
+    jwtSecret: "CHANGE_ME_JWT_SECRET"
+
+livenessProbe:
+  httpGet:
+    path: /health/live
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health/ready
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 2
+
+terminationGracePeriodSeconds: 30
+
+# StatefulSet Configuration for production stateful workloads
+statefulSet:
+  enabled: false
+  replicaCount: 3
+  accessMode: ReadWriteOnce
+  storageClassName: fast-ssd
+  storageSize: 50Gi
+  dataPath: /data
+  loadBalancerEnabled: true
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 10

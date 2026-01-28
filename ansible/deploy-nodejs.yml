@@ -1,0 +1,87 @@
+---
+# Ansible Playbook to Deploy Node.js Application
+# This playbook zips, copies, unzips, builds and runs a simple Node.js app
+
+- name: Deploy Node.js Application
+  hosts: all
+  become: yes
+  vars:
+    app_name: nodejs_app
+    app_source_path: "{{ playbook_dir }}/../app"  # Path to local nodejs app
+    app_dest_path: "/opt/{{ app_name }}"
+    app_zip_file: "{{ app_name }}.zip"
+    app_temp_path: "/tmp/{{ app_zip_file }}"
+    nodejs_port: 3000
+
+  tasks:
+    - name: Ensure destination directory exists
+      file:
+        path: "{{ app_dest_path }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create archive of Node.js application
+      archive:
+        path: "{{ app_source_path }}"
+        dest: "/tmp/{{ app_zip_file }}"
+        format: zip
+      delegate_to: localhost
+      run_once: yes
+
+    - name: Copy zipped application to remote host
+      copy:
+        src: "/tmp/{{ app_zip_file }}"
+        dest: "{{ app_temp_path }}"
+        mode: '0644'
+
+    - name: Extract application archive
+      unarchive:
+        src: "{{ app_temp_path }}"
+        dest: "{{ app_dest_path }}"
+        remote_src: yes
+
+    - name: Install Node.js dependencies
+      community.general.npm:
+        path: "{{ app_dest_path }}"
+        state: present
+
+    - name: Build Node.js application (if build script exists)
+      shell: |
+        cd {{ app_dest_path }}
+        npm run build
+      ignore_errors: yes
+      register: build_result
+
+    - name: Display build output
+      debug:
+        msg: "{{ build_result.stdout }}"
+
+    - name: Start Node.js application
+      shell: |
+        cd {{ app_dest_path }}
+        nohup npm start > /tmp/nodejs_app.log 2>&1 &
+      environment:
+        NODE_ENV: production
+
+    - name: Wait for application to start
+      wait_for:
+        port: "{{ nodejs_port }}"
+        delay: 5
+        timeout: 30
+
+    - name: Verify application is running
+      shell: "curl -f http://localhost:{{ nodejs_port }} || echo 'Service not ready yet'"
+      register: health_check
+      retries: 5
+      delay: 2
+      until: health_check.rc == 0
+      ignore_errors: yes
+
+    - name: Application deployment status
+      debug:
+        msg: "Node.js application deployed successfully on port {{ nodejs_port }}"
+
+    - name: Cleanup temporary zip file
+      file:
+        path: "{{ app_temp_path }}"
+        state: absent

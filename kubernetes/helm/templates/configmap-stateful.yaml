@@ -1,0 +1,15 @@
+{{- if .Values.statefulSet.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "microservice-api.fullname" . }}-stateful-config
+  labels:
+    {{- include "microservice-api.labels" . | nindent 4 }}
+    workload-type: stateful
+data:
+  database_host: {{ .Values.config.database.host | quote }}
+  database_port: {{ .Values.config.database.port | quote }}
+  redis_host: {{ .Values.config.redis.host | quote }}
+  redis_port: {{ .Values.config.redis.port | quote }}
+  api_version: {{ .Values.config.api.version | quote }}
+{{- end }}

@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "microservice-api.fullname" . }}-stateful
+  labels:
+    {{- include "microservice-api.labels" . | nindent 4 }}
+    workload-type: stateful
+  annotations:
+    description: "Headless service for StatefulSet"
+spec:
+  clusterIP: None
+  ports:
+  - port: {{ .Values.service.port }}
+    targetPort: {{ .Values.service.targetPort }}
+    protocol: TCP
+    name: http
+  - port: {{ .Values.service.metricsPort }}
+    targetPort: {{ .Values.service.metricsPort }}
+    protocol: TCP
+    name: metrics
+  selector:
+    {{- include "microservice-api.selectorLabels" . | nindent 4 }}
+    workload-type: stateful
+
+{{- if .Values.statefulSet.loadBalancerEnabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "microservice-api.fullname" . }}-stateful-lb
+  labels:
+    {{- include "microservice-api.labels" . | nindent 4 }}
+    workload-type: stateful
+    type: loadbalancer
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+  - port: {{ .Values.service.port }}
+    targetPort: {{ .Values.service.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "microservice-api.selectorLabels" . | nindent 4 }}
+    workload-type: stateful
+{{- end }}

@@ -1,0 +1,33 @@
+{{- if and .Values.statefulSet.enabled .Values.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "microservice-api.fullname" . }}-stateful
+  labels:
+    {{- include "microservice-api.labels" . | nindent 4 }}
+    workload-type: stateful
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: {{ include "microservice-api.fullname" . }}-stateful
+  minReplicas: {{ .Values.statefulSet.autoscaling.minReplicas | default 2 }}
+  maxReplicas: {{ .Values.statefulSet.autoscaling.maxReplicas | default 5 }}
+  metrics:
+  {{- if .Values.autoscaling.targetCPUUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+  {{- end }}
+  {{- if .Values.autoscaling.targetMemoryUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
+  {{- end }}
+{{- end }}

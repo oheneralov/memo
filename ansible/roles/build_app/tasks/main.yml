@@ -1,0 +1,33 @@
+---
+# Role to install and build Node.js application
+
+- name: Install Node.js (Ubuntu/Debian)
+  apt:
+    name: nodejs
+    state: present
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+
+- name: Install Node.js (CentOS/RedHat)
+  yum:
+    name: nodejs
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Install npm packages
+  community.general.npm:
+    path: "{{ app_dest_path }}"
+    state: present
+
+- name: Run build script if exists
+  shell: |
+    cd {{ app_dest_path }}
+    if [ -f "package.json" ] && grep -q '"build"' package.json; then
+      npm run build
+    fi
+  register: build_result
+  ignore_errors: yes
+
+- name: Display build output
+  debug:
+    msg: "Build output: {{ build_result.stdout }}"

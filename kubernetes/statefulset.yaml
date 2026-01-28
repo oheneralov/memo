@@ -1,0 +1,164 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: microservice-stateful
+  namespace: default
+  labels:
+    app: microservice-stateful
+    version: v1
+spec:
+  serviceName: microservice-stateful
+  replicas: 3
+  selector:
+    matchLabels:
+      app: microservice-stateful
+  template:
+    metadata:
+      labels:
+        app: microservice-stateful
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      serviceAccountName: microservice-stateful
+      containers:
+      - name: microservice-stateful
+        image: microservice-stateful:1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: DATABASE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: microservice-stateful-config
+              key: database_host
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: microservice-stateful-secrets
+              key: database_password
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+        - name: logs
+          mountPath: /var/log/microservice
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - microservice-stateful
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: config
+        configMap:
+          name: microservice-stateful-config
+      - name: logs
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: microservice-stateful
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: microservice-stateful
+  namespace: default
+  labels:
+    app: microservice-stateful
+  annotations:
+    description: "Headless service for StatefulSet"
+spec:
+  clusterIP: None
+  selector:
+    app: microservice-stateful
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: microservice-stateful-lb
+  namespace: default
+  labels:
+    app: microservice-stateful
+    type: loadbalancer
+spec:
+  type: LoadBalancer
+  selector:
+    app: microservice-stateful
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  sessionAffinity: ClientIP
+  externalTrafficPolicy: Local

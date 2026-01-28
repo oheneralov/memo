@@ -1,0 +1,78 @@
+---
+# ClusterIP Service for internal communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: microservice-api
+  namespace: default
+  labels:
+    app: microservice-api
+  annotations:
+    description: "Internal service for microservice-api"
+spec:
+  type: ClusterIP
+  selector:
+    app: microservice-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  sessionAffinity: None
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+# NodePort Service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: microservice-api-nodeport
+  namespace: default
+  labels:
+    app: microservice-api
+    type: nodeport
+spec:
+  type: NodePort
+  selector:
+    app: microservice-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    nodePort: 30001
+    protocol: TCP
+
+---
+# LoadBalancer Service for cloud providers
+apiVersion: v1
+kind: Service
+metadata:
+  name: microservice-api-lb
+  namespace: default
+  labels:
+    app: microservice-api
+    type: loadbalancer
+  annotations:
+    service.beta.kubernetes.io/load-balancer-type: "external"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app: microservice-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  externalTrafficPolicy: Local
+  healthCheckNodePort: 30002

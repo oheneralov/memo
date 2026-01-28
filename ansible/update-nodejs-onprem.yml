@@ -1,0 +1,84 @@
+---
+# Playbook for updating a running Node.js app on on-premises servers
+# Useful for rolling updates without downtime
+
+- name: Rolling Update Node.js Application
+  hosts: nodejs_app_servers
+  serial: 1  # Update one server at a time for zero downtime
+  become: yes
+  
+  vars:
+    app_source_path: "{{ playbook_dir }}/../app"
+    app_dest_path: "/opt/nodejs_app"
+    nodejs_port: 3000
+
+  pre_tasks:
+    - name: Notify update start
+      debug:
+        msg: "Starting update on {{ inventory_hostname }}"
+
+  tasks:
+    - name: Create backup of current app
+      shell: |
+        if [ -d "{{ app_dest_path }}" ]; then
+          cp -r {{ app_dest_path }} {{ app_dest_path }}.backup.$(date +%Y%m%d_%H%M%S)
+        fi
+
+    - name: Create new archive
+      archive:
+        path: "{{ app_source_path }}"
+        dest: "/tmp/nodejs_app_update.zip"
+        format: zip
+      delegate_to: localhost
+      run_once: yes
+
+    - name: Copy updated application
+      copy:
+        src: "/tmp/nodejs_app_update.zip"
+        dest: "/tmp/nodejs_app_update.zip"
+        mode: '0644'
+
+    - name: Extract updated application
+      unarchive:
+        src: "/tmp/nodejs_app_update.zip"
+        dest: "{{ app_dest_path }}"
+        remote_src: yes
+
+    - name: Install updated dependencies
+      community.general.npm:
+        path: "{{ app_dest_path }}"
+        state: present
+
+    - name: Restart application
+      shell: |
+        pkill -f "npm start" || true
+        sleep 2
+        cd {{ app_dest_path }}
+        nohup npm start > /var/log/nodejs_app.log 2>&1 &
+      environment:
+        NODE_ENV: production
+
+    - name: Wait for application to start
+      wait_for:
+        port: "{{ nodejs_port }}"
+        delay: 3
+        timeout: 30
+
+    - name: Health check
+      uri:
+        url: "http://localhost:{{ nodejs_port }}/"
+        method: GET
+        status_code: [200, 404]
+      retries: 5
+      delay: 2
+      register: health_check
+
+    - name: Update status
+      debug:
+        msg: "{{ inventory_hostname }} updated successfully"
+
+  post_tasks:
+    - name: Cleanup temporary files
+      file:
+        path: "/tmp/nodejs_app_update.zip"
+        state: absent

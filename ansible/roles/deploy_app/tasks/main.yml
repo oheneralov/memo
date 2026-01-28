@@ -1,0 +1,29 @@
+---
+# Role to handle application packaging and transfer
+
+- name: Create archive of Node.js application
+  archive:
+    path: "{{ app_source_path }}"
+    dest: "/tmp/{{ app_zip_file }}"
+    format: zip
+  delegate_to: localhost
+  run_once: yes
+
+- name: Copy zipped application to remote host
+  copy:
+    src: "/tmp/{{ app_zip_file }}"
+    dest: "{{ app_temp_path }}"
+    mode: '0644'
+
+- name: Extract application archive
+  unarchive:
+    src: "{{ app_temp_path }}"
+    dest: "{{ app_dest_path }}"
+    remote_src: yes
+
+- name: Cleanup temporary zip file on control machine
+  file:
+    path: "/tmp/{{ app_zip_file }}"
+    state: absent
+  delegate_to: localhost
+  run_once: yes

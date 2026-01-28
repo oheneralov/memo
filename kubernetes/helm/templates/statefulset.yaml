@@ -1,0 +1,109 @@
+{{- if .Values.statefulSet.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "microservice-api.fullname" . }}-stateful
+  labels:
+    {{- include "microservice-api.labels" . | nindent 4 }}
+    workload-type: stateful
+spec:
+  serviceName: {{ include "microservice-api.fullname" . }}-stateful
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.statefulSet.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "microservice-api.selectorLabels" . | nindent 6 }}
+      workload-type: stateful
+  template:
+    metadata:
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "microservice-api.selectorLabels" . | nindent 8 }}
+        workload-type: stateful
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "microservice-api.serviceAccountName" . }}-stateful
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.targetPort }}
+          protocol: TCP
+        - name: metrics
+          containerPort: {{ .Values.service.metricsPort }}
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        {{- range $key, $value := .Values.env }}
+        - name: {{ $key }}
+          value: "{{ $value }}"
+        {{- end }}
+        - name: DATABASE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "microservice-api.fullname" . }}-stateful-config
+              key: database_host
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "microservice-api.fullname" . }}-stateful-secrets
+              key: database_password
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 12 }}
+        volumeMounts:
+        - name: data
+          mountPath: {{ .Values.statefulSet.dataPath }}
+        - name: tmp
+          mountPath: /tmp
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      volumes:
+      - name: tmp
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        {{- include "microservice-api.labels" . | nindent 8 }}
+    spec:
+      accessModes: [ "{{ .Values.statefulSet.accessMode }}" ]
+      storageClassName: {{ .Values.statefulSet.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.statefulSet.storageSize }}
+{{- end }}

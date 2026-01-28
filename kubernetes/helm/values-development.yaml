@@ -1,0 +1,68 @@
+# Example development values for Helm deployment
+replicaCount: 1
+
+image:
+  repository: microservice-api
+  tag: "latest"
+  pullPolicy: Always
+
+serviceAccount:
+  create: true
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+serviceLoadBalancer:
+  enabled: false
+
+ingress:
+  enabled: false
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+
+env:
+  ENVIRONMENT: "development"
+  LOG_LEVEL: "debug"
+  CACHE_ENABLED: "false"
+
+config:
+  database:
+    host: "localhost"
+    port: "5432"
+  redis:
+    host: "localhost"
+    port: "6379"
+
+secrets:
+  create: true
+  database:
+    password: "devpassword"
+  api:
+    key: "devkey123"
+    jwtSecret: "devjwtsecret"
+
+terminationGracePeriodSeconds: 10
+
+# StatefulSet Configuration for development stateful workloads
+statefulSet:
+  enabled: false
+  replicaCount: 1
+  accessMode: ReadWriteOnce
+  storageClassName: standard
+  storageSize: 5Gi
+  dataPath: /data
+  loadBalancerEnabled: false
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 3

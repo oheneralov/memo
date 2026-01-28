@@ -1,0 +1,17 @@
+apiVersion: v2
+name: microservice-api
+description: A Helm chart for deploying microservices with Kubernetes
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - microservice
+  - api
+  - kubernetes
+maintainers:
+  - name: DevOps Team
+    email: devops@example.com
+home: https://github.com/example/microservice-api
+sources:
+  - https://github.com/example/microservice-api
+dependencies: []

@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "microservice-api.fullname" . }}
+  labels:
+    {{- include "microservice-api.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - port: {{ .Values.service.port }}
+    targetPort: {{ .Values.service.targetPort }}
+    protocol: TCP
+    name: http
+  - port: {{ .Values.service.metricsPort }}
+    targetPort: {{ .Values.service.metricsPort }}
+    protocol: TCP
+    name: metrics
+  selector:
+    {{- include "microservice-api.selectorLabels" . | nindent 4 }}
+
+{{- if .Values.serviceLoadBalancer.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "microservice-api.fullname" . }}-lb
+  labels:
+    {{- include "microservice-api.labels" . | nindent 4 }}
+    type: loadbalancer
+spec:
+  type: {{ .Values.serviceLoadBalancer.type }}
+  externalTrafficPolicy: {{ .Values.serviceLoadBalancer.externalTrafficPolicy }}
+  ports:
+  - port: {{ .Values.serviceLoadBalancer.port }}
+    targetPort: {{ .Values.serviceLoadBalancer.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "microservice-api.selectorLabels" . | nindent 4 }}
+{{- end }}
